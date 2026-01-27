@@ -6,7 +6,7 @@ elseif (Test-Path "$env:ProgramFiles(x86)\Git\bin") {
 }
 
 try {
-    sh.exe build.sh $args
+    & "E:\DevTools\Git\bin\bash.exe" build.sh $args
 }
 catch {
     echo "bash.exe doesn't found"

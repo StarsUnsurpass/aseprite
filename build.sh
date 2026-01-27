@@ -65,7 +65,7 @@ if ! cmake --version >/dev/null ; then
     echo ""
     exit 1
 fi
-if ! ninja --version >/dev/null ; then
+if ! "E:\DevTools\ninja-win\ninja.exe" --version >/dev/null ; then
     echo ""
     echo "ninja utility is not available. You can get ninja from:"
     echo ""
