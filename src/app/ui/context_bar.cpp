@@ -2516,6 +2516,12 @@ void ContextBar::discardActiveBrush()
   setActiveBrush(ContextBar::createBrushFromPreferences());
 }
 
+#include <fstream> // Add this for std::ifstream
+#include "doc/image_io.h" // Add this for doc::read_image
+#include "base/fs.h" // Add this for base::is_file
+
+// ... (rest of existing includes)
+
 // static
 doc::BrushRef ContextBar::createBrushFromPreferences(ToolPreferences::Brush* brushPref)
 {
@@ -2525,9 +2531,65 @@ doc::BrushRef ContextBar::createBrushFromPreferences(ToolPreferences::Brush* bru
   }
 
   doc::BrushRef brush;
-  brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
-                        brushPref->size(),
-                        brushPref->angle()));
+  std::string textureFilename = brushPref->texture_filename();
+
+  if (!textureFilename.empty()) {
+    // Check if the file exists before trying to open
+    if (base::is_file(textureFilename)) {
+      std::ifstream is(textureFilename, std::ios::binary);
+      if (is.is_open()) {
+        try {
+          Image* loadedImagePtr = doc::read_image(is);
+          if (loadedImagePtr) {
+            ImageRef loadedImage(loadedImagePtr); // Wrap in ImageRef for proper management
+            // If a texture image is successfully loaded, create an image brush.
+            brush.reset(new Brush(doc::kImageBrushType,
+                                  brushPref->size(),
+                                  brushPref->angle()));
+            brush->setImage(loadedImage.get(), nullptr); // Set the actual brush image (m_image)
+            brush->setPatternImage(loadedImage);        // Set the pattern image (m_patternImage)
+            // Restore pattern to default or specific setting if needed
+            brush->setPattern(doc::BrushPattern::PAINT_BRUSH); // Default for texture brushes
+          } else {
+            // Fallback if image couldn't be read, create a default brush.
+            LOG(WARNING, "CONTEXT_BAR: Could not read image from file '%s'. Falling back to default brush.\n",
+                textureFilename.c_str());
+            brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
+                                  brushPref->size(),
+                                  brushPref->angle()));
+          }
+        } catch (const std::exception& e) {
+          // Log error and fallback to default brush
+          LOG(ERROR, "CONTEXT_BAR: Error loading texture brush image '%s': %s. Falling back to default brush.\n",
+              textureFilename.c_str(), e.what());
+          brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
+                                brushPref->size(),
+                                brushPref->angle()));
+        }
+        is.close();
+      } else {
+        // File could not be opened, fallback to default brush
+        LOG(WARNING, "CONTEXT_BAR: Could not open texture brush image file '%s'. Falling back to default brush.\n",
+            textureFilename.c_str());
+        brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
+                              brushPref->size(),
+                              brushPref->angle()));
+      }
+    } else {
+      // File does not exist, fallback to default brush
+      LOG(WARNING, "CONTEXT_BAR: Texture brush image file does not exist: '%s'. Falling back to default brush.\n",
+          textureFilename.c_str());
+      brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
+                            brushPref->size(),
+                            brushPref->angle()));
+    }
+  } else {
+    // No texture filename, create a default brush based on type, size, angle.
+    brush.reset(new Brush(static_cast<doc::BrushType>(brushPref->type()),
+                          brushPref->size(),
+                          brushPref->angle()));
+  }
+
   return brush;
 }
 
